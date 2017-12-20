@@ -1,5 +1,21 @@
 #!/bin/bash -e
 
+function patchconfig {
+    local file=$1
+    local patch_content=$2
+    local patch_type=${3:-strategic}
+    local tmpfile=$(mktemp)
+
+    sudo cp $file $tmpfile
+
+    sudo /data/src/github.com/openshift/origin/_output/local/bin/linux/amd64/oc ex config patch \
+	 --type=${patch_type} \
+	 $tmpfile \
+	 --patch=${patch_content} | sudo tee $file >/dev/null
+
+    sudo rm $tmpfile
+}
+
 echo "[INFO] Starting OpenShift..."
 # write config
 sudo /data/src/github.com/openshift/origin/_output/local/bin/linux/amd64/openshift start \
