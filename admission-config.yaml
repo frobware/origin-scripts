@@ -1,0 +1,10 @@
+admissionConfig:
+  pluginConfig:
+    openshift.io/ImageQualify:
+      configuration:
+        kind: ImageQualifyConfig
+        apiVersion: admission.config.openshift.io/v1
+        rules:
+          - pattern: nginx
+            domain: localhost:5000
+  
