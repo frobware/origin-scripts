@@ -1,5 +1,18 @@
 #!/bin/bash -e
 
+function patchcmd {
+    local version="$(openshift version | grep '^openshift v' | awk -F 'v' '{print $2}')"
+    local semver=(${version//./ })
+    local major="${semver[0]}"
+    local minor="${semver[1]}"
+
+    if [[ "$major" -le "3" ]] && [[ "$minor" -lt "8" ]]; then
+	echo "openshift"
+    else
+	echo "oc"
+    fi
+}
+
 function patchconfig {
     local file=$1
     local patch_content=$2
@@ -8,7 +21,7 @@ function patchconfig {
 
     sudo cp $file $tmpfile
 
-    sudo /data/src/github.com/openshift/origin/_output/local/bin/linux/amd64/oc ex config patch \
+    sudo /data/src/github.com/openshift/origin/_output/local/bin/linux/amd64/$(patchcmd) ex config patch \
 	 --type=${patch_type} \
 	 $tmpfile \
 	 --patch=${patch_content} | sudo tee $file >/dev/null
@@ -28,8 +41,12 @@ sudo /data/src/github.com/openshift/origin/_output/local/bin/linux/amd64/openshi
 server_ip=$(ip -o -4 addr show up primary scope global dynamic | awk '{print $4}' | cut -f1  -d'/')
 patchconfig $HOME/openshift.local.config/master/master-config.yaml '{"routingConfig":{"subdomain":"'"${server_ip}"'.nip.io"}}'
 patchconfig $HOME/openshift.local.config/node-"$(hostname)"/node-config.yaml '{"kubeletArguments":{"image-gc-high-threshold":["99"]}}'
+
+patchconfig $HOME/openshift.local.config/master/master-config.yaml \
+	    $(./yaml2json < admission-config.yaml)
+
 # start openshift
-loglevel=${1:-0}
+loglevel=${1:-5}
 mkdir -p $HOME/logs
 sudo /data/src/github.com/openshift/origin/_output/local/bin/linux/amd64/openshift start \
     --master-config=$HOME/openshift.local.config/master/master-config.yaml \
@@ -86,10 +103,10 @@ if [[ $? -eq 0 ]]; then
 fi
 set -e
 
-echo "[INFO] Creating prometheus..."
-oc new-app \
-    -f /data/src/github.com/openshift/origin/examples/prometheus/prometheus.yaml \
-    --config=$HOME/openshift.local.config/master/admin.kubeconfig
+# echo "[INFO] Creating prometheus..."
+# oc new-app \
+#     -f /data/src/github.com/openshift/origin/examples/prometheus/prometheus.yaml \
+#     --config=$HOME/openshift.local.config/master/admin.kubeconfig
 
 echo "[INFO] Importing ImageStreams..."
 oc create \
@@ -98,17 +115,17 @@ oc create \
     --config=$HOME/openshift.local.config/master/admin.kubeconfig
 
 echo "[INFO] Setting up policy..."
-oc adm policy add-role-to-user view test-admin \
-    --namespace=kube-system \
-    --config=$HOME/openshift.local.config/master/admin.kubeconfig
-oc adm policy add-role-to-user view test-admin \
-    --namespace=default \
-    --config=$HOME/openshift.local.config/master/admin.kubeconfig
+# oc adm policy add-role-to-user system:cluster-admin test-admin \
+#     --namespace=kube-system \
+#     --config=$HOME/openshift.local.config/master/admin.kubeconfig
+# oc adm policy add-role-to-user system:cluster-admin test-admin \
+#     --namespace=default \
+#     --config=$HOME/openshift.local.config/master/admin.kubeconfig
 
-echo "[INFO] Logging in to OpenShift..."
-oc login localhost:8443 \
-    -u test-admin -p pass \
-    --certificate-authority=$HOME/openshift.local.config/master/ca.crt
+# echo "[INFO] Logging in to OpenShift..."
+# oc login localhost:8443 \
+#     -u test-admin -p pass \
+#     --certificate-authority=$HOME/openshift.local.config/master/ca.crt
 
 echo "[INFO] Creating new project..."
 oc new-project test \
